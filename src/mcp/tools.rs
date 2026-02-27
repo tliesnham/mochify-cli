@@ -1,0 +1,99 @@
+use crate::api::{MochifyClient, ProcessParams};
+use rmcp::{
+    ServerHandler,
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
+    model::{ServerCapabilities, ServerInfo},
+    schemars, tool, tool_handler, tool_router,
+};
+use serde::Deserialize;
+use std::path::PathBuf;
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SquishInput {
+    #[schemars(description = "Absolute path to the input image file on the user's local macOS filesystem (e.g. /Users/username/Desktop/photo.jpg). Ask the user for the path if you don't know it.")]
+    pub file_path: String,
+
+    #[schemars(description = "Output format: jpg, png, webp, avif, or jxl")]
+    #[serde(rename = "type")]
+    pub format: Option<String>,
+
+    #[schemars(description = "Target width in pixels")]
+    pub width: Option<u32>,
+
+    #[schemars(description = "Target height in pixels")]
+    pub height: Option<u32>,
+
+    #[schemars(description = "Crop image to exact dimensions")]
+    pub crop: Option<bool>,
+
+    #[schemars(description = "Rotation in degrees: 0, 90, 180, or 270")]
+    pub rotation: Option<u32>,
+
+    #[schemars(description = "Absolute output directory path on the user's local macOS filesystem. Defaults to same directory as input file.")]
+    pub output_dir: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct MochifyMcp {
+    pub api_key: Option<String>,
+    tool_router: ToolRouter<Self>,
+}
+
+impl MochifyMcp {
+    pub fn new(api_key: Option<String>) -> Self {
+        Self {
+            api_key,
+            tool_router: Self::tool_router(),
+        }
+    }
+}
+
+#[tool_router]
+impl MochifyMcp {
+    #[tool(description = "Process an image using the mochify.xyz API. Supports format conversion (jpg/png/webp/avif/jxl), resizing, cropping, and rotation.")]
+    async fn squish(&self, Parameters(input): Parameters<SquishInput>) -> String {
+        let path = PathBuf::from(&input.file_path);
+
+        let out_dir = match input.output_dir {
+            Some(ref d) => PathBuf::from(d),
+            None => path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from(".")),
+        };
+
+        let client = MochifyClient::new(self.api_key.clone());
+        let params = ProcessParams {
+            format: input.format,
+            width: input.width,
+            height: input.height,
+            crop: input.crop,
+            rotation: input.rotation,
+        };
+
+        match client.squish(&path, &params, &out_dir).await {
+            Ok(out_path) => format!("Saved to {}", out_path.display()),
+            Err(e) => format!("Error: {e:#}"),
+        }
+    }
+}
+
+#[tool_handler]
+impl ServerHandler for MochifyMcp {
+    fn get_info(&self) -> ServerInfo {
+        ServerInfo {
+            instructions: Some(
+                "You have access to the mochify image processing API via the squish tool. \
+                 The squish tool reads files directly from the user's local filesystem — \
+                 you do NOT need to read the file yourself. \
+                 ALWAYS use the squish tool for any image processing task (compression, \
+                 format conversion, resizing, cropping, rotation). \
+                 Do NOT say you cannot access local files — the squish tool does this for you. \
+                 If the user has not provided a file path, ask them for the full path to the image."
+                    .into(),
+            ),
+            capabilities: ServerCapabilities::builder().enable_tools().build(),
+            ..Default::default()
+        }
+    }
+}
