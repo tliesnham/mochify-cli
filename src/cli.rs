@@ -34,6 +34,10 @@ pub struct Args {
     #[arg(short, long, value_name = "DIR")]
     pub output: Option<PathBuf>,
 
+    /// Natural-language prompt — calls /v1/prompt to resolve params
+    #[arg(short = 'p', long, value_name = "TEXT")]
+    pub prompt: Option<String>,
+
     /// API key [env: MOCHIFY_API_KEY]
     #[arg(short = 'k', long, env = "MOCHIFY_API_KEY", value_name = "KEY")]
     pub api_key: Option<String>,

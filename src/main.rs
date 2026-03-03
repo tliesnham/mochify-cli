@@ -25,13 +25,23 @@ async fn main() -> Result<()> {
 }
 
 async fn process_files(args: Args) -> Result<()> {
-    let client = MochifyClient::new(args.api_key);
-    let params = ProcessParams {
+    let client = MochifyClient::new(args.api_key.clone());
+
+    // Explicit CLI flags — these always win over prompt-derived params.
+    let explicit = ProcessParams {
         format: args.format,
         width: args.width,
         height: args.height,
         crop: if args.crop { Some(true) } else { None },
         rotation: args.rotation,
+    };
+
+    // If a prompt was supplied, resolve params for all files in one request.
+    let prompt_map = if let Some(ref prompt) = args.prompt {
+        let paths: Vec<&std::path::Path> = args.files.iter().map(|p| p.as_path()).collect();
+        Some(client.resolve_prompt(prompt, &paths).await?)
+    } else {
+        None
     };
 
     for file_path in &args.files {
@@ -43,6 +53,18 @@ async fn process_files(args: Args) -> Result<()> {
                 .unwrap_or_else(|| PathBuf::from(".")),
         };
 
+        let params = match &prompt_map {
+            Some(map) => {
+                let filename = file_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default();
+                let base = map.get(filename).cloned().unwrap_or_default();
+                merge_params(base, explicit.clone())
+            }
+            None => explicit.clone(),
+        };
+
         match client.squish(file_path, &params, &out_dir).await {
             Ok(out) => println!("{}", out.display()),
             Err(e) => eprintln!("Error processing {}: {e:#}", file_path.display()),
@@ -50,6 +72,18 @@ async fn process_files(args: Args) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Merge prompt-derived `base` params with explicit CLI `overrides`.
+/// Any explicitly set field in `overrides` wins; unset fields fall back to `base`.
+fn merge_params(base: ProcessParams, overrides: ProcessParams) -> ProcessParams {
+    ProcessParams {
+        format: overrides.format.or(base.format),
+        width: overrides.width.or(base.width),
+        height: overrides.height.or(base.height),
+        crop: overrides.crop.or(base.crop),
+        rotation: overrides.rotation.or(base.rotation),
+    }
 }
 
 async fn run_mcp_server(api_key: Option<String>) -> Result<()> {

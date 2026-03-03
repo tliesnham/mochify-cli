@@ -1,16 +1,49 @@
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
 const BASE_URL: &str = "https://api.mochify.xyz";
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct ProcessParams {
     pub format: Option<String>,
     pub width: Option<u32>,
     pub height: Option<u32>,
     pub crop: Option<bool>,
     pub rotation: Option<u32>,
+}
+
+#[derive(Serialize)]
+struct PromptFileData {
+    name: String,
+    width: u32,
+    height: u32,
+}
+
+#[derive(Serialize)]
+struct PromptRequest<'a> {
+    prompt: &'a str,
+    #[serde(rename = "fileData")]
+    file_data: Vec<PromptFileData>,
+}
+
+#[derive(Deserialize)]
+struct PromptFileResult {
+    filename: String,
+    #[serde(rename = "type")]
+    format: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    crop: Option<bool>,
+    #[serde(default)]
+    rotate: u32,
+}
+
+#[derive(Deserialize)]
+struct PromptResponse {
+    files: Vec<PromptFileResult>,
 }
 
 pub struct MochifyClient {
@@ -24,6 +57,66 @@ impl MochifyClient {
             api_key,
             client: reqwest::Client::new(),
         }
+    }
+
+    /// Resolve natural-language `prompt` into per-file `ProcessParams` by calling /v1/prompt.
+    /// Returns a map keyed by filename (basename only).
+    pub async fn resolve_prompt(
+        &self,
+        prompt: &str,
+        files: &[&Path],
+    ) -> Result<HashMap<String, ProcessParams>> {
+        let mut file_data = Vec::new();
+        for &path in files {
+            let path_clone = path.to_path_buf();
+            let size = tokio::task::spawn_blocking(move || imagesize::size(&path_clone))
+                .await?
+                .with_context(|| format!("failed to read image dimensions for {}", path.display()))?;
+            let name = path
+                .file_name()
+                .context("invalid filename")?
+                .to_string_lossy()
+                .into_owned();
+            file_data.push(PromptFileData {
+                name,
+                width: size.width as u32,
+                height: size.height as u32,
+            });
+        }
+
+        let body = PromptRequest { prompt, file_data };
+        let mut req = self
+            .client
+            .post(format!("{BASE_URL}/v1/prompt"))
+            .json(&body);
+
+        if let Some(ref key) = self.api_key {
+            req = req.header("Authorization", format!("Bearer {key}"));
+        }
+
+        let response = req.send().await.context("prompt request failed")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("API error {status}: {body}");
+        }
+
+        let prompt_response: PromptResponse =
+            response.json().await.context("failed to parse prompt response")?;
+
+        let mut result = HashMap::new();
+        for file in prompt_response.files {
+            let params = ProcessParams {
+                format: file.format,
+                width: file.width,
+                height: file.height,
+                crop: file.crop,
+                rotation: (file.rotate != 0).then_some(file.rotate),
+            };
+            result.insert(file.filename, params);
+        }
+        Ok(result)
     }
 
     pub async fn squish(
