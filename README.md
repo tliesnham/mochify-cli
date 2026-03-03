@@ -14,13 +14,13 @@ Or build manually:
 
 ```bash
 cargo build --release
-# binary at ./target/release/mochify-cli
+# binary at ./target/release/mochify
 ```
 
 ## CLI Usage
 
 ```bash
-mochify-cli [OPTIONS] <FILES>...
+mochify [OPTIONS] <FILES>...
 ```
 
 ### Options
@@ -39,23 +39,23 @@ mochify-cli [OPTIONS] <FILES>...
 
 ```bash
 # Convert a JPEG to AVIF
-mochify-cli photo.jpg -t avif
+mochify photo.jpg -t avif
 
 # Resize and convert to WebP
-mochify-cli photo.jpg -t webp -w 800
+mochify photo.jpg -t webp -w 800
 
 # Batch convert a folder to AVIF at 1200px wide
-mochify-cli ./images/*.jpg -t avif -w 1200 -o ./compressed
+mochify ./images/*.jpg -t avif -w 1200 -o ./compressed
 
 # With an API key
-MOCHIFY_API_KEY=your-key mochify-cli photo.jpg -t jxl
+MOCHIFY_API_KEY=your-key mochify photo.jpg -t jxl
 ```
 
 Free usage is 25 images per day without an API key. Visit [mochify.xyz](https://mochify.xyz) for more.
 
 ## MCP Server (Claude Desktop)
 
-`mochify-cli` can run as an [MCP server](https://modelcontextprotocol.io), letting Claude process images on your behalf directly from conversation.
+`mochify` can run as an [MCP server](https://modelcontextprotocol.io), letting Claude process images on your behalf directly from conversation.
 
 ### Setup
 
