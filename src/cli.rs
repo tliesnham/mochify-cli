@@ -47,4 +47,6 @@ pub struct Args {
 pub enum Commands {
     /// Start MCP server on stdio
     Serve,
+    /// Show API usage for the current key
+    Usage,
 }

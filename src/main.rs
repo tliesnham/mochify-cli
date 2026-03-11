@@ -16,6 +16,13 @@ async fn main() -> Result<()> {
 
     match args.command {
         Some(Commands::Serve) => run_mcp_server(args.api_key).await,
+        Some(Commands::Usage) => {
+            let client = MochifyClient::new(args.api_key);
+            let usage = client.get_usage().await?;
+            println!("Remaining: {}", usage.remaining);
+            println!("Available: {}", usage.available);
+            Ok(())
+        }
         None => {
             if args.files.is_empty() {
                 eprintln!("No input files specified. Run with --help for usage.");

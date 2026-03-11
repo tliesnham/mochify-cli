@@ -72,7 +72,13 @@ impl MochifyMcp {
         };
 
         match client.squish(&path, &params, &out_dir).await {
-            Ok(out_path) => format!("Saved to {}", out_path.display()),
+            Ok(out_path) => {
+                let usage_note = match client.get_usage().await {
+                    Ok(u) => format!(" ({} requests remaining today)", u.remaining),
+                    Err(_) => String::new(),
+                };
+                format!("Saved to {}{}", out_path.display(), usage_note)
+            }
             Err(e) => format!("Error: {e:#}"),
         }
     }

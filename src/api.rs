@@ -30,6 +30,12 @@ struct PromptRequest<'a> {
 }
 
 #[derive(Deserialize)]
+pub struct UsageInfo {
+    pub remaining: i32,
+    pub available: bool,
+}
+
+#[derive(Deserialize)]
 struct PromptFileResult {
     filename: String,
     #[serde(rename = "type")]
@@ -57,6 +63,20 @@ impl MochifyClient {
             api_key,
             client: reqwest::Client::new(),
         }
+    }
+
+    pub async fn get_usage(&self) -> Result<UsageInfo> {
+        let mut req = self.client.get(format!("{BASE_URL}/v1/checkTokens"));
+        if let Some(ref key) = self.api_key {
+            req = req.header("x-api-key", key.as_str());
+        }
+        let response = req.send().await.context("usage request failed")?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("API error {status}: {body}");
+        }
+        response.json().await.context("failed to parse usage response")
     }
 
     /// Resolve natural-language `prompt` into per-file `ProcessParams` by calling /v1/prompt.
@@ -99,10 +119,17 @@ impl MochifyClient {
         let status = response.status();
         if !status.is_success() {
             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                anyhow::bail!(
-                    "Rate limit exceeded. You've hit the free tier limit of 25 requests/day. \
-                     Upgrade to a Pro account at https://mochify.xyz for a higher limit."
-                );
+                if self.api_key.is_none() {
+                    anyhow::bail!(
+                        "Rate limit exceeded. Unauthenticated requests are limited to 3/month per IP. \
+                         Sign up at https://mochify.xyz to get 30 free requests/month."
+                    );
+                } else {
+                    anyhow::bail!(
+                        "Rate limit exceeded. You've hit your plan's monthly limit. \
+                         Upgrade at https://mochify.xyz for higher limits (Lite: 300/month, Pro: 1200/month)."
+                    );
+                }
             }
             let body = response.text().await.unwrap_or_default();
             anyhow::bail!("API error {status}: {body}");
@@ -159,7 +186,7 @@ impl MochifyClient {
             query.push(("crop", c.to_string()));
         }
         if let Some(r) = params.rotation {
-            query.push(("rotation", r.to_string()));
+            query.push(("rotate", r.to_string()));
         }
 
         let mut req = self
@@ -170,7 +197,7 @@ impl MochifyClient {
             .body(bytes);
 
         if let Some(ref key) = self.api_key {
-            req = req.header("Authorization", format!("Bearer {key}"));
+            req = req.header("x-api-key", key.as_str());
         }
 
         let response = req.send().await.context("request failed")?;
@@ -178,10 +205,17 @@ impl MochifyClient {
         let status = response.status();
         if !status.is_success() {
             if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                anyhow::bail!(
-                    "Rate limit exceeded. You've hit the free tier limit of 25 requests/day. \
-                     Upgrade to a Pro account at https://mochify.xyz for a higher limit."
-                );
+                if self.api_key.is_none() {
+                    anyhow::bail!(
+                        "Rate limit exceeded. Unauthenticated requests are limited to 3/month per IP. \
+                         Sign up at https://mochify.xyz to get 30 free requests/month."
+                    );
+                } else {
+                    anyhow::bail!(
+                        "Rate limit exceeded. You've hit your plan's monthly limit. \
+                         Upgrade at https://mochify.xyz for higher limits (Lite: 300/month, Pro: 1200/month)."
+                    );
+                }
             }
             let body = response.text().await.unwrap_or_default();
             anyhow::bail!("API error {status}: {body}");
