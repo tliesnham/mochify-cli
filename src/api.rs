@@ -30,6 +30,12 @@ struct PromptRequest<'a> {
 }
 
 #[derive(Deserialize)]
+pub struct UsageInfo {
+    pub remaining: i32,
+    pub available: bool,
+}
+
+#[derive(Deserialize)]
 struct PromptFileResult {
     filename: String,
     #[serde(rename = "type")]
@@ -57,6 +63,20 @@ impl MochifyClient {
             api_key,
             client: reqwest::Client::new(),
         }
+    }
+
+    pub async fn get_usage(&self) -> Result<UsageInfo> {
+        let mut req = self.client.get(format!("{BASE_URL}/v1/checkTokens"));
+        if let Some(ref key) = self.api_key {
+            req = req.header("x-api-key", key.as_str());
+        }
+        let response = req.send().await.context("usage request failed")?;
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            anyhow::bail!("API error {status}: {body}");
+        }
+        response.json().await.context("failed to parse usage response")
     }
 
     /// Resolve natural-language `prompt` into per-file `ProcessParams` by calling /v1/prompt.
