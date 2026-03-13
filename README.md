@@ -13,15 +13,19 @@ Compress and convert images to modern formats (AVIF, JXL, WebP, Jpegli) from you
 
 ## Installation
 
-Download the latest binary from [Releases](https://github.com/getmochify/mochify-cli/releases), or build from source:
+**macOS (Homebrew):**
+
+```bash
+brew tap getmochify/mochify
+brew install mochify
+```
+
+**Manual:** Download the latest binary from [Releases](https://github.com/getmochify/mochify-cli/releases).
+
+**From source:**
 
 ```bash
 cargo install --path .
-```
-
-```bash
-cargo build --release
-# binary at ./target/release/mochify
 ```
 
 ## CLI Usage
@@ -79,7 +83,20 @@ Add the following to your Claude Desktop config at `~/Library/Application Suppor
 {
   "mcpServers": {
     "mochify": {
-      "command": "/path/to/mochify-cli",
+      "command": "mochify",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+With an API key (for higher limits):
+
+```json
+{
+  "mcpServers": {
+    "mochify": {
+      "command": "mochify",
       "args": ["serve"],
       "env": {
         "MOCHIFY_API_KEY": "your-key-here"
