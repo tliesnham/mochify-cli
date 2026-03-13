@@ -20,7 +20,21 @@ brew tap getmochify/mochify
 brew install mochify
 ```
 
-**Manual:** Download the latest binary from [Releases](https://github.com/getmochify/mochify-cli/releases).
+**Linux / WSL:**
+
+```bash
+# x86_64
+curl -L https://github.com/getmochify/mochify-cli/releases/latest/download/mochify-linux-x86_64 -o mochify
+chmod +x mochify
+sudo mv mochify /usr/local/bin/
+
+# arm64
+curl -L https://github.com/getmochify/mochify-cli/releases/latest/download/mochify-linux-arm64 -o mochify
+chmod +x mochify
+sudo mv mochify /usr/local/bin/
+```
+
+**Manual:** All binaries at [Releases](https://github.com/getmochify/mochify-cli/releases).
 
 **From source:**
 
