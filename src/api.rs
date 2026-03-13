@@ -73,6 +73,13 @@ impl MochifyClient {
         let response = req.send().await.context("usage request failed")?;
         let status = response.status();
         if !status.is_success() {
+            if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+                anyhow::bail!(
+                    "Usage tracking requires an API key. \
+                     Set MOCHIFY_API_KEY or pass --api-key. \
+                     Sign up at https://mochify.xyz to get one."
+                );
+            }
             let body = response.text().await.unwrap_or_default();
             anyhow::bail!("API error {status}: {body}");
         }
