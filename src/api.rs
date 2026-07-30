@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 
 const BASE_URL: &str = "https://api.mochify.app";
-const WORKER_URL: &str = "https://tokens.mochify.app";
+const WORKER_URL: &str = "https://id.mochify.app";
 
 #[derive(Debug, Default, Clone)]
 pub struct ProcessParams {
@@ -21,6 +21,8 @@ pub struct ProcessParams {
     pub clarity: Option<bool>,
     pub remove_background: Option<bool>,
     pub background: Option<String>,
+    /// EXIF/metadata handling. The API strips by default; `Some(false)` preserves it.
+    pub strip_exif: Option<bool>,
 }
 
 /// Parameters for a `/v1/pdf` request. `op` is "split" (one PDF per page) or
@@ -83,6 +85,10 @@ struct PromptRequest<'a> {
 #[derive(Deserialize)]
 pub struct UsageInfo {
     pub remaining: i32,
+    #[serde(default)]
+    pub quota: i32,
+    #[serde(default)]
+    pub plan: String,
     pub available: bool,
 }
 
@@ -138,22 +144,25 @@ impl MochifyClient {
     }
 
     pub async fn get_usage(&self) -> Result<UsageInfo> {
-        let mut req = self.client.get(format!("{BASE_URL}/v1/checkTokens"));
-        if let Some(ref key) = self.api_key {
-            req = req.bearer_auth(key);
-        }
-        let response = req.send().await.context("usage request failed")?;
+        // `/v1/usage` returns anonymous IP-based quota when unauthenticated, so gate
+        // locally: `mochify usage` reports *your account's* usage and needs a key.
+        let Some(key) = self.api_key.as_ref() else {
+            anyhow::bail!(
+                "Usage tracking requires authentication. \
+                 Run `mochify auth login` to sign in, \
+                 or set MOCHIFY_API_KEY / pass --api-key for automation. \
+                 Sign up at https://mochify.app if you don't have an account."
+            );
+        };
+        let response = self
+            .client
+            .get(format!("{WORKER_URL}/v1/usage"))
+            .bearer_auth(key)
+            .send()
+            .await
+            .context("usage request failed")?;
         let status = response.status();
         if !status.is_success() {
-            if status == reqwest::StatusCode::UNAUTHORIZED
-                || status == reqwest::StatusCode::FORBIDDEN
-            {
-                anyhow::bail!(
-                    "Usage tracking requires an API key. \
-                     Set MOCHIFY_API_KEY or pass --api-key. \
-                     Sign up at https://mochify.app to get one."
-                );
-            }
             let body = response.text().await.unwrap_or_default();
             anyhow::bail!("API error {status}: {body}");
         }
@@ -485,7 +494,7 @@ fn rate_limit_error(has_key: bool) -> anyhow::Error {
     } else {
         anyhow::anyhow!(
             "Rate limit exceeded. Unauthenticated requests are limited to 3/month per IP. \
-             Sign up at https://mochify.app to get 25 free requests/month."
+             Sign up at https://mochify.app, then run `mochify auth login` for 25 free requests/month."
         )
     }
 }
@@ -560,6 +569,7 @@ fn expand_file_variants(file: &PromptFileResult) -> Vec<ProcessParams> {
                 clarity: file.clarity,
                 remove_background: file.remove_background,
                 background: file.background.clone(),
+                strip_exif: None,
             });
         }
     }
@@ -593,6 +603,10 @@ fn build_squish_query(params: &ProcessParams) -> Vec<(&'static str, String)> {
     }
     if let Some(ref bg) = params.background {
         query.push(("background", bg.clone()));
+    }
+    // The API strips EXIF by default; only send the param when explicitly set.
+    if let Some(strip) = params.strip_exif {
+        query.push(("stripExif", strip.to_string()));
     }
     query
 }
@@ -737,6 +751,19 @@ mod tests {
         assert!(q.iter().any(|(k, v)| *k == "type" && v == "webp"));
         assert!(!q.iter().any(|(k, _)| *k == "width"));
         assert!(!q.iter().any(|(k, _)| *k == "height"));
+    }
+
+    #[test]
+    fn strip_exif_only_sent_when_set() {
+        // Default (None) — metadata handling left to the API default.
+        let none = build_squish_query(&ProcessParams::default());
+        assert!(!none.iter().any(|(k, _)| *k == "stripExif"));
+        // Explicit preserve.
+        let keep = build_squish_query(&ProcessParams {
+            strip_exif: Some(false),
+            ..Default::default()
+        });
+        assert!(keep.iter().any(|(k, v)| *k == "stripExif" && v == "false"));
     }
 
     #[test]

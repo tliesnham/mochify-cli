@@ -49,6 +49,16 @@ pub struct Args {
     #[arg(long = "remove-bg")]
     pub remove_bg: bool,
 
+    /// Composite background colour (e.g. "white", "black", "#ff0000").
+    /// Pair with --remove-bg; omit for a transparent result on PNG/WebP/AVIF/JXL.
+    #[arg(long = "background", value_name = "COLOR")]
+    pub background: Option<String>,
+
+    /// Preserve EXIF/metadata (GPS, timestamps, device info).
+    /// Metadata is stripped by default; pass this to keep it.
+    #[arg(long = "keep-metadata")]
+    pub keep_metadata: bool,
+
     /// Natural-language prompt — calls /v1/prompt to resolve params
     #[arg(short = 'p', long, value_name = "TEXT")]
     pub prompt: Option<String>,
@@ -65,7 +75,8 @@ pub struct Args {
     #[arg(short = 'q', long, value_name = "N")]
     pub quality: Option<u32>,
 
-    /// API key [env: MOCHIFY_API_KEY]
+    /// API key for automation/CI [env: MOCHIFY_API_KEY].
+    /// Interactive users can run `mochify auth login` instead.
     #[arg(short = 'k', long, env = "MOCHIFY_API_KEY", value_name = "KEY")]
     pub api_key: Option<String>,
 

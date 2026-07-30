@@ -11,7 +11,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::PathBuf;
 use std::time::Duration;
 
-const WORKER_URL: &str = "https://tokens.mochify.app";
+const WORKER_URL: &str = "https://id.mochify.app";
 const AUTH_URL: &str = "https://mochify.app/auth/cli";
 
 #[tokio::main]
@@ -28,7 +28,14 @@ async fn main() -> Result<()> {
         Some(Commands::Usage) => {
             let client = MochifyClient::new(args.api_key);
             let usage = client.get_usage().await?;
-            println!("Remaining: {}", usage.remaining);
+            if !usage.plan.is_empty() {
+                println!("Plan: {}", usage.plan);
+            }
+            if usage.quota > 0 {
+                println!("Remaining: {} / {}", usage.remaining, usage.quota);
+            } else {
+                println!("Remaining: {}", usage.remaining);
+            }
             println!("Available: {}", usage.available);
             Ok(())
         }
@@ -157,6 +164,13 @@ async fn process_files(args: Args) -> Result<()> {
         return process_pdfs(&args, &client).await;
     }
 
+    // Reject rotations the API won't accept before doing any work.
+    if let Some(r) = args.rotation
+        && !matches!(r, 0 | 90 | 180 | 270)
+    {
+        anyhow::bail!("Invalid --rotation {r}. Use 0, 90, 180, or 270.");
+    }
+
     // Explicit CLI flags — these always win over prompt-derived params.
     let explicit = ProcessParams {
         format: args.format,
@@ -168,7 +182,12 @@ async fn process_files(args: Args) -> Result<()> {
         output_name: args.name,
         clarity: if args.clarity { Some(true) } else { None },
         remove_background: if args.remove_bg { Some(true) } else { None },
-        background: None,
+        background: args.background,
+        strip_exif: if args.keep_metadata {
+            Some(false)
+        } else {
+            None
+        },
     };
 
     // If a prompt was supplied, resolve params for all files in one request.
@@ -383,6 +402,9 @@ fn format_params_summary(p: &ProcessParams) -> String {
     if let Some(ref bg) = p.background {
         parts.push(format!("bg {bg}"));
     }
+    if p.strip_exif == Some(false) {
+        parts.push("keep metadata".into());
+    }
     if parts.is_empty() {
         "original settings".into()
     } else {
@@ -452,6 +474,7 @@ fn merge_params(base: ProcessParams, overrides: ProcessParams) -> ProcessParams 
         clarity: overrides.clarity.or(base.clarity),
         remove_background: overrides.remove_background.or(base.remove_background),
         background: overrides.background.or(base.background),
+        strip_exif: overrides.strip_exif.or(base.strip_exif),
     }
 }
 

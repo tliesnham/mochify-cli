@@ -55,6 +55,11 @@ pub struct SquishInput {
         description = "Background colour when removing background. Omit for transparent (default for PNG/WebP/AVIF/JXL). Use \"white\", \"black\", or a hex value like \"#ff0000\". JPEG always composites (default white)."
     )]
     pub background: Option<String>,
+
+    #[schemars(
+        description = "Strip EXIF/metadata (GPS, timestamps, device identifiers). Defaults to true — metadata is removed. Set false to preserve the original metadata."
+    )]
+    pub strip_metadata: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -134,6 +139,7 @@ impl MochifyMcp {
             clarity: input.clarity,
             remove_background: input.remove_background,
             background: input.background,
+            strip_exif: input.strip_metadata,
         };
 
         match client.squish(&path, &params, &out_dir).await {
