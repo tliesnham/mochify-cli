@@ -67,6 +67,20 @@ jobs:
         with:
           files: ${{ matrix.artifact }}
 
+  crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
+
   homebrew:
     name: Update Homebrew Formula
     runs-on: ubuntu-latest
