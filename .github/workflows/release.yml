@@ -97,17 +97,23 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           BASE="https://github.com/getmochify/mochify-cli/releases/download/${VERSION}"
-          ARM64_SHA=$(curl -sL "${BASE}/mochify-macos-arm64" | sha256sum | awk '{print $1}')
-          X86_SHA=$(curl -sL "${BASE}/mochify-macos-x86_64" | sha256sum | awk '{print $1}')
-          echo "arm64_sha=${ARM64_SHA}" >> "$GITHUB_OUTPUT"
-          echo "x86_sha=${X86_SHA}" >> "$GITHUB_OUTPUT"
+          MAC_ARM64_SHA=$(curl -sL "${BASE}/mochify-macos-arm64" | sha256sum | awk '{print $1}')
+          MAC_X86_SHA=$(curl -sL "${BASE}/mochify-macos-x86_64" | sha256sum | awk '{print $1}')
+          LINUX_ARM64_SHA=$(curl -sL "${BASE}/mochify-linux-arm64" | sha256sum | awk '{print $1}')
+          LINUX_X86_SHA=$(curl -sL "${BASE}/mochify-linux-x86_64" | sha256sum | awk '{print $1}')
+          echo "mac_arm64_sha=${MAC_ARM64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "mac_x86_sha=${MAC_X86_SHA}" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha=${LINUX_ARM64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "linux_x86_sha=${LINUX_X86_SHA}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION#v}" >> "$GITHUB_OUTPUT"
 
       - name: Write formula
         run: |
           VERSION="${{ steps.sha.outputs.version }}"
-          ARM64_SHA="${{ steps.sha.outputs.arm64_sha }}"
-          X86_SHA="${{ steps.sha.outputs.x86_sha }}"
+          MAC_ARM64_SHA="${{ steps.sha.outputs.mac_arm64_sha }}"
+          MAC_X86_SHA="${{ steps.sha.outputs.mac_x86_sha }}"
+          LINUX_ARM64_SHA="${{ steps.sha.outputs.linux_arm64_sha }}"
+          LINUX_X86_SHA="${{ steps.sha.outputs.linux_x86_sha }}"
           cat > Formula/mochify.rb << EOF
           class Mochify < Formula
             desc "CLI and MCP server for AI-powered image optimization via mochify.app"
@@ -118,11 +124,22 @@ jobs:
             on_macos do
               on_arm do
                 url "https://github.com/getmochify/mochify-cli/releases/download/v${VERSION}/mochify-macos-arm64"
-                sha256 "${ARM64_SHA}"
+                sha256 "${MAC_ARM64_SHA}"
               end
               on_intel do
                 url "https://github.com/getmochify/mochify-cli/releases/download/v${VERSION}/mochify-macos-x86_64"
-                sha256 "${X86_SHA}"
+                sha256 "${MAC_X86_SHA}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/getmochify/mochify-cli/releases/download/v${VERSION}/mochify-linux-arm64"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+              on_intel do
+                url "https://github.com/getmochify/mochify-cli/releases/download/v${VERSION}/mochify-linux-x86_64"
+                sha256 "${LINUX_X86_SHA}"
               end
             end
 
